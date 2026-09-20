@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MLB Long Season Props Dashboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117; --bg2: #181c24; --bg3: #1f2330;
+    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
+    --text: #f0f2f5; --muted: #8a8f9e;
+    --accent: #f0b429; --accent2: #e09010;
+    --green: #2ecc71; --red: #e74c3c; --blue: #3498db;
+    --purple: #9b59b6; --radius: 10px; --radius-sm: 6px;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+  header { background: var(--bg2); border-bottom: 0.5px solid var(--border2); padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; position: sticky; top: 0; z-index: 100; }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 36px; height: 36px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; color: #1a1a1a; }
+  header h1 { font-size: 15px; font-weight: 600; }
+  header p { font-size: 12px; color: var(--muted); }
+  .header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .btn { padding: 8px 16px; border-radius: var(--radius-sm); border: 0.5px solid var(--border2); background: var(--bg3); color: var(--text); cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.15s; }
+  .btn:hover { background: var(--bg2); }
+  .btn.reload { background: var(--accent); color: #1a1a1a; border-color: var(--accent2); font-weight: 700; }
+  .btn.reload:hover { background: var(--accent2); }
+  .btn.save-btn { background: var(--green); color: #1a1a1a; border-color: #27ae60; font-weight: 700; }
+  .btn.save-btn:hover { background: #27ae60; }
+  .btn.csv-btn { background: var(--purple); color: #fff; border-color: #8e44ad; font-weight: 600; }
+  .btn.csv-btn:hover { background: #8e44ad; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status-bar { font-size: 12px; color: var(--muted); padding: 6px 12px; background: var(--bg3); border-radius: 20px; border: 0.5px solid var(--border); }
+  .status-bar.loading { color: var(--accent); }
+  .status-bar.done { color: var(--green); }
+  .status-bar.error { color: var(--red); }
+  .status-bar.saving { color: var(--blue); }
+  .main { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+
+  .proj-panel { background: var(--bg2); border: 0.5px solid var(--border2); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1.25rem; display: none; }
+  .proj-panel.open { display: block; }
+  .proj-panel h3 { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .proj-section { border-top: 0.5px solid var(--border2); padding-top: 12px; margin-top: 12px; }
+  .proj-section:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+  .hint { font-size: 11px; color: var(--muted); line-height: 1.5; }
+  .hint a { color: var(--accent); }
+  .hint.ok { color: var(--green); }
+  .paste-controls { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; align-items: center; }
+  .paste-controls select { padding: 5px 10px; background: var(--bg3); border: 0.5px solid var(--border2); border-radius: var(--radius-sm); color: var(--text); font-size: 12px; }
+  .paste-status { font-size: 11px; color: var(--muted); }
+  .paste-status.ok { color: var(--green); }
+  textarea.paste-area { width: 100%; min-height: 90px; resize: vertical; background: var(--bg3); border: 0.5px solid var(--border2); border-radius: var(--radius-sm); color: var(--text); font-family: monospace; font-size: 11px; padding: 8px 10px; line-height: 1.5; }
+  textarea.paste-area:focus { outline: none; border-color: var(--accent); }
+  textarea.paste-area::placeholder { color: var(--muted); }
+
+  .search-bar { margin-bottom: 1.25rem; }
+  .search-bar input { width: 100%; padding: 10px 14px; background: var(--bg2); border: 0.5px solid var(--border2); border-radius: var(--radius); color: var(--text); font-size: 13px; }
+  .search-bar input:focus { outline: none; border-color: var(--accent); }
+  .search-bar input::placeholder { color: var(--muted); }
+  .teams-grid { display: flex; flex-direction: column; gap: 1.5rem; }
+  .division-section { margin-bottom: 2rem; }
+  .division-title { font-size: 18px; font-weight: 700; padding: 10px 16px; border-radius: var(--radius-sm); margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; }
+  .division-section.al .division-title { background: rgba(52,152,219,0.15); color: var(--blue); border-left: 4px solid var(--blue); }
+  .division-section.nl .division-title { background: rgba(231,76,60,0.15); color: var(--red); border-left: 4px solid var(--red); }
+  .division-section.al .team-header { border-left: 3px solid var(--blue); }
+  .division-section.nl .team-header { border-left: 3px solid var(--red); }
+  .team-card { background: var(--bg2); border: 0.5px solid var(--border2); border-radius: var(--radius); overflow: hidden; }
+  .team-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--bg3); border-bottom: 0.5px solid var(--border2); cursor: pointer; user-select: none; }
+  .team-name-label { font-size: 15px; font-weight: 600; flex: 1; }
+  .team-league { font-size: 11px; color: var(--muted); background: var(--bg); padding: 2px 8px; border-radius: 20px; border: 0.5px solid var(--border); }
+  .team-toggle { color: var(--muted); font-size: 12px; }
+  .team-body { padding: 16px; display: none; overflow-x: auto; }
+  .team-body.open { display: block; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .tab-btn { padding: 6px 14px; border-radius: 20px; border: 0.5px solid var(--border2); background: none; color: var(--muted); cursor: pointer; font-size: 12px; font-weight: 500; }
+  .tab-btn.active { background: var(--accent); color: #1a1a1a; border-color: var(--accent2); font-weight: 700; }
+  .tab-btn.pitcher-tab.active { background: var(--blue); color: #fff; border-color: #2980b9; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .stat-section { margin-bottom: 24px; }
+  .stat-section-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; padding: 4px 8px; background: var(--bg3); border-radius: 4px; display: inline-block; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th { color: var(--muted); font-weight: 600; text-align: left; padding: 6px 8px; border-bottom: 0.5px solid var(--border2); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+  thead th.right { text-align: right; }
+  thead th.center { text-align: center; }
+  thead th.th-proj { text-align: right; color: var(--purple); }
+  thead th.th-next { text-align: right; color: var(--green); }
+  tbody tr { border-bottom: 0.5px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+  td { padding: 7px 8px; vertical-align: middle; white-space: nowrap; }
+  td.right { text-align: right; font-family: monospace; }
+  td.center { text-align: center; }
+  td.td-proj { text-align: right; font-family: monospace; color: var(--purple); font-weight: 600; }
+  td.td-next { text-align: right; font-family: monospace; color: var(--green); font-weight: 700; }
+  td.td-war { text-align: right; font-family: monospace; color: var(--accent); }
+  .col-sep { border-left: 0.5px solid var(--border2); }
+  .player-name { font-weight: 500; color: var(--text); cursor: pointer; border-radius: 3px; padding: 2px 4px; display: inline-flex; align-items: center; gap: 8px; }
+  .player-photo { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: var(--bg3); flex-shrink: 0; vertical-align: middle; }
+  .player-name:hover { color: var(--accent); background: rgba(240,180,41,0.08); }
+  .player-name.copied { color: var(--green); }
+  .stat-na { color: var(--muted); }
+  .my-line-input { width: 55px; padding: 3px 5px; font-size: 12px; text-align: center; background: var(--bg3); border: 0.5px solid var(--border2); border-radius: 4px; color: var(--text); font-family: monospace; }
+  .my-line-input:focus { outline: none; border-color: var(--accent); }
+  .my-line-input.has-value { border-color: rgba(52,152,219,0.6); background: rgba(52,152,219,0.07); }
+  .my-line-input.unsaved { border-color: rgba(240,180,41,0.6); background: rgba(240,180,41,0.07); }
+  .badge-win { display: inline-block; background: rgba(46,204,113,0.15); color: var(--green); border: 0.5px solid rgba(46,204,113,0.3); border-radius: 4px; padding: 2px 7px; font-size: 10px; font-weight: 600; }
+  .badge-pending { display: inline-block; background: rgba(138,143,158,0.1); color: var(--muted); border: 0.5px solid var(--border); border-radius: 4px; padding: 2px 7px; font-size: 10px; }
+  .badge-empty { color: var(--muted); font-size: 11px; }
+  .unsaved-notice { font-size: 12px; color: var(--accent); background: rgba(240,180,41,0.08); border: 0.5px solid rgba(240,180,41,0.2); border-radius: 6px; padding: 6px 12px; display: none; }
+  .unsaved-notice.show { display: inline-block; }
+  .intro { text-align: center; padding: 3rem 1rem; }
+  .intro h2 { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+  .intro p { color: var(--muted); font-size: 14px; margin-bottom: 1.5rem; line-height: 1.6; }
+  .empty-msg { color: var(--muted); font-size: 13px; padding: 1rem; text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="logo">⚾</div>
+    <div>
+      <h1>MLB Long Season Props Dashboard</h1>
+      <p id="last-update">Not loaded — click Reload to fetch data</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="unsaved-notice" id="unsaved-notice">⚠ Unsaved changes</span>
+    <input type="number" id="year-input" value="2026" min="2020" max="2030" style="width:80px;padding:8px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px;">
+    <span class="status-bar" id="status-badge">Ready</span>
+    <button class="btn csv-btn" onclick="toggleProj()">📂 Projections</button>
+    <button class="btn save-btn" id="save-btn" onclick="saveLines()" title="Saves your lines AND the loaded projections to the cloud, so teammates see them too">💾 Save Data</button>
+    <button class="btn reload" id="reload-btn" onclick="loadAllTeams()">⟳ Reload Data</button>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- Projections Panel -->
+  <div class="proj-panel" id="proj-panel">
+
+    <p class="hint ok" id="proj-cloud-status" style="margin-bottom:12px; font-weight:600;">Loading saved projections…</p>
+
+    <!-- Paste Text Section -->
+    <div class="proj-section">
+      <h3>📋 Paste Fangraphs Projection Text</h3>
+      <p class="hint" style="margin-bottom:10px;">
+        Go to <a href="https://www.fangraphs.com/projections" target="_blank">fangraphs.com/projections</a> → select ZiPS 2027 or Steamer 2027 → click inside the table → <strong>Ctrl+A → Ctrl+C</strong> → paste below.
+      </p>
+      <div class="paste-controls">
+        <select id="paste-sys">
+          <option value="zips">ZiPS 2027</option>
+          <option value="steamer">Steamer 2027</option>
+          <option value="dc">Depth Charts 2027</option>
+        </select>
+        <select id="paste-type">
+          <option value="bat">Batters</option>
+          <option value="pit">Pitchers</option>
+        </select>
+        <button class="btn" style="padding:5px 14px;font-size:12px;" onclick="parsePasted()">⚡ Parse Text</button>
+        <span class="paste-status" id="paste-status"></span>
+      </div>
+      <textarea class="paste-area" id="paste-input" placeholder="Paste Fangraphs table text here (Ctrl+V)..."></textarea>
+    </div>
+
+  </div>
+
+  <div class="search-bar">
+    <input type="text" id="search" placeholder="Search player or team..." oninput="filterTeams()">
+  </div>
+
+  <div id="intro" class="intro">
+    <h2>MLB Season Long Props Dashboard</h2>
+    <p>Click <strong>Reload Data</strong> to load all 30 MLB teams ranked by WAR.<br>
+    Click <strong>📂 Projections</strong> to paste or upload 2027 projection data from Fangraphs.</p>
+    <button class="btn reload" onclick="loadAllTeams()" style="font-size:15px;padding:12px 28px;">⟳ Load Data Now</button>
+  </div>
+
+  <div class="teams-grid" id="teams-grid"></div>
+</div>
+
+<script>
+const MLB_API = 'https://statsapi.mlb.com/api/v1';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzNdtKvfN2YTvPlPgBO5shaRhPIu-Vkj4CKH40-B0n6B44ga1OHTJWroFOIp1tjm5-uCQ/exec';
+
+const CY = () => parseInt(document.getElementById('year-input').value);
+const SEASONS = () => { const y=CY(); return [y,y-1,y-2]; };
+const NY = () => CY()+1;
+
+let pendingLines={}, cloudLines={};
+let projData={ zips:{bat:{},pit:{}}, steamer:{bat:{},pit:{}}, dc:{bat:{},pit:{}} };
+
+// --- Projections Panel ---
+function toggleProj() { document.getElementById('proj-panel').classList.toggle('open'); }
+
+// Normalize a player name for matching: strip accents, punctuation, extra spaces, lowercase.
+// This fixes mismatches like "Acuña" (MLB API) vs "Acuna" (Fangraphs), "A.J." vs "AJ", etc.
+function normalizeName(s) {
+  return (s||'')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // strip accents
+    .replace(/[.,']/g,'')                              // strip periods/commas/apostrophes
+    .replace(/\s+/g,' ')
+    .trim()
+    .toLowerCase();
+}
+
+// Split a row of pasted text into cells. Fangraphs copy usually uses real tabs,
+// but some browsers/paths collapse them into runs of spaces — detect and handle both.
+function splitRow(line) {
+  if (line.includes('\t')) return line.split('\t').map(v => v.trim());
+  return line.split(/ {2,}/).map(v => v.trim()).filter(v => v !== '');
+}
+
+// Parse pasted Fangraphs text
+function parsePasted() {
+  const text = document.getElementById('paste-input').value.trim();
+  const sys = document.getElementById('paste-sys').value;
+  const type = document.getElementById('paste-type').value;
+  const statusEl = document.getElementById('paste-status');
+
+  if (!text) { statusEl.textContent = 'Please paste some text first.'; statusEl.className='paste-status'; return; }
+
+  const lines = text.split('\n').filter(l => l.trim());
+  // Find header line (contains "Name")
+  let hdrIdx = lines.findIndex(l => l.toLowerCase().includes('name'));
+  if (hdrIdx === -1) hdrIdx = 0;
+
+  const headers = splitRow(lines[hdrIdx]);
+  const nameColIdx = headers.findIndex(h => h.toLowerCase() === 'name');
+  const rows = lines.slice(hdrIdx+1);
+
+  projData[sys][type] = {};
+  let count = 0;
+  rows.forEach(row => {
+    const vals = splitRow(row);
+    if (vals.length < 2) return;
+    const obj = {};
+    headers.forEach((h,i) => obj[h] = vals[i]||'');
+    const rawName = nameColIdx>=0 ? vals[nameColIdx] : (obj['Name'] || obj['name'] || '');
+    const name = normalizeName(rawName);
+    if (name && name.length > 1) {
+      projData[sys][type][name] = obj;
+      count++;
+    }
+  });
+
+  if (count > 0) {
+    statusEl.textContent = '✓ '+count+' players loaded from '+sys.toUpperCase()+' ('+type+') — headers: '+headers.slice(0,6).join(', ')+(headers.length>6?'…':'');
+    statusEl.className = 'paste-status ok';
+    document.getElementById('paste-input').value = '';
+    setS('✓ Projections loaded — click Save Data, then Reload Data','done');
+    markUnsaved();
+    refreshProjStatusUI();
+  } else {
+    statusEl.textContent = '✗ No players found. Detected '+headers.length+' column(s): "'+headers.join('" | "')+'" — make sure you copied the full table including the header row.';
+    statusEl.className = 'paste-status';
+  }
+}
+
+function getProj(playerName, sys, type, statKey) {
+  const row = projData[sys][type][normalizeName(playerName)];
+  if (!row) return null;
+  const map = {
+    hr:['HR'], h:['H'], rbi:['RBI'], sb:['SB'],
+    k:['SO','K','K/9'], era:['ERA'], w:['W'], war:['WAR']
+  };
+  for (const col of (map[statKey]||[statKey.toUpperCase()])) {
+    if (row[col]!==undefined && row[col]!=='') return parseFloat(row[col]);
+  }
+  return null;
+}
+
+function dispProj(v) {
+  if (v===null||v===undefined) return '<span class="stat-na">—</span>';
+  return Number.isInteger(v) ? v : parseFloat(v).toFixed(1);
+}
+
+// --- Cloud ---
+function markUnsaved() { document.getElementById('unsaved-notice').classList.add('show'); }
+function clearUnsaved() {
+  document.getElementById('unsaved-notice').classList.remove('show');
+  document.querySelectorAll('.my-line-input.unsaved').forEach(el=>{el.classList.remove('unsaved');if(el.value)el.classList.add('has-value');});
+}
+
+// Show how many players are currently loaded per projection system, so anyone
+// opening the site (or you, after a cloud load) can see what's already there.
+function refreshProjStatusUI() {
+  const el = document.getElementById('proj-cloud-status');
+  if (!el) return;
+  const labels = { zips:'ZiPS 27', steamer:'Steamer 27', dc:'Depth Charts 27' };
+  const parts = Object.keys(labels).map(sys => {
+    const nb = Object.keys(projData[sys].bat).length;
+    const np = Object.keys(projData[sys].pit).length;
+    return labels[sys]+': '+nb+' batters / '+np+' pitchers';
+  });
+  const any = ['zips','steamer','dc'].some(sys => Object.keys(projData[sys].bat).length || Object.keys(projData[sys].pit).length);
+  el.textContent = (any ? '📊 Loaded — ' : '📊 No projections loaded yet — ') + parts.join(' · ');
+}
+
+// Ensure a projData object has the expected shape, filling in any missing systems/types.
+function ensureProjShape(pd) {
+  const out = { zips:{bat:{},pit:{}}, steamer:{bat:{},pit:{}}, dc:{bat:{},pit:{}} };
+  if (pd) {
+    ['zips','steamer','dc'].forEach(sys => {
+      if (pd[sys]) {
+        out[sys].bat = pd[sys].bat || {};
+        out[sys].pit = pd[sys].pit || {};
+      }
+    });
+  }
+  return out;
+}
+
+async function saveLines() {
+  const btn=document.getElementById('save-btn');
+  btn.disabled=true; setS('Saving...','saving');
+  Object.entries(pendingLines).forEach(([p,st])=>{if(!cloudLines[p])cloudLines[p]={};Object.assign(cloudLines[p],st);});
+  try {
+    await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({lines:cloudLines,projData:projData,updatedAt:new Date().toISOString()})});
+    pendingLines={}; clearUnsaved(); setS('✓ Saved! Teammates will see this on next load','done');
+  } catch(e) { setS('Error saving','error'); }
+  btn.disabled=false;
+  setTimeout(()=>setS('✓ '+document.querySelectorAll('.team-card').length+' teams loaded','done'),2500);
+}
+
+async function loadCloudLines() {
+  try {
+    const res=await fetch(GAS_URL);
+    const data=JSON.parse(await res.text());
+    cloudLines=data.lines||{};
+    projData=ensureProjShape(data.projData);
+  } catch(e) { cloudLines={}; }
+  refreshProjStatusUI();
+}
+
+function getML(n,s) { return pendingLines[n]?.[s]??cloudLines[n]?.[s]??''; }
+function setML(n,s,v) {
+  if(!pendingLines[n]) pendingLines[n]={};
+  if(v===''||v===null){delete pendingLines[n][s];if(cloudLines[n])delete cloudLines[n][s];}
+  else pendingLines[n][s]=parseFloat(v);
+  markUnsaved();
+}
+
+function badge(cur,ml,sk) {
+  if(ml===''||ml===undefined) return '<span class="badge-empty">—</span>';
+  if(cur===null||cur===undefined) return '<span class="badge-pending">Pending</span>';
+  const c=parseFloat(cur),l=parseFloat(ml);
+  if(sk==='era') return c<=l?'<span class="badge-win">✓ Win</span>':'<span class="badge-pending">Pending</span>';
+  return c>l?'<span class="badge-win">✓ Win</span>':'<span class="badge-pending">Pending</span>';
+}
+
+function setS(msg,cls) { const el=document.getElementById('status-badge'); el.textContent=msg; el.className='status-bar '+(cls||''); }
+
+// Fetch JSON with retries: the MLB Stats API can rate-limit us when we fire hundreds
+// of requests at once (30 teams x ~40 players x 4 season calls each). Without retries,
+// a single failed request silently drops that player from the rankings entirely.
+async function fj(url, attempts) {
+  attempts = attempts || 3;
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(r.status);
+      return await r.json();
+    } catch (e) {
+      lastErr = e;
+      if (i < attempts - 1) await new Promise(res => setTimeout(res, 300 * (i + 1))); // backoff
+    }
+  }
+  console.warn('MLB API request failed after retries:', url, lastErr);
+  throw lastErr;
+}
+
+async function getRoster(tid) {
+  // rosterType=active excludes players on the injured list — a star who's
+  // temporarily hurt (even a two-way player) would vanish entirely. 40Man
+  // roster includes IL players, giving a more complete and accurate roster.
+  try { const d=await fj(MLB_API+'/teams/'+tid+'/roster?rosterType=40Man&season='+CY()); return d.roster||[]; }
+  catch(e) { return []; }
+}
+
+async function getStat(id,season,group) {
+  try { const d=await fj(MLB_API+'/people/'+id+'/stats?stats=season&season='+season+'&group='+group); return d.stats?.[0]?.splits?.[0]?.stat||null; }
+  catch(e) { console.warn('Failed to load',group,'stats for player',id,'season',season); return null; }
+}
+
+async function getStats(id,group) {
+  const [y0,y1,y2]=SEASONS(), yn=NY();
+  const [r0,r1,r2,rn]=await Promise.all([getStat(id,y0,group),getStat(id,y1,group),getStat(id,y2,group),getStat(id,yn,group)]);
+  return {s1:r0,s2:r1,s3:r2,sNext:rn};
+}
+
+function raw(s,f) { if(!s||s[f]==null) return null; return f==='era'?parseFloat(s[f]).toFixed(2):s[f]; }
+function dv(v) { return v===null?'<span class="stat-na">—</span>':v; }
+
+function copyName(span,name) {
+  navigator.clipboard.writeText(name).then(()=>{
+    const o=span.textContent; span.classList.add('copied'); span.textContent='✓';
+    setTimeout(()=>{span.textContent=o;span.classList.remove('copied');},1000);
+  });
+}
+
+function onLC(input,name,stat,nv) {
+  const val=input.value.trim();
+  setML(name,stat,val);
+  input.classList.remove('has-value','unsaved');
+  if(val!=='') input.classList.add('unsaved');
+  const el=document.getElementById('st_'+name.replace(/[^a-zA-Z0-9]/g,'_')+'_'+stat);
+  if(el) el.innerHTML=badge(nv,val,stat);
+}
+
+function buildTable(players,statKey,statLabel,fieldKey,ptype) {
+  const [y0,y1,y2]=SEASONS(), yn=NY();
+  let h='<div class="stat-section"><div class="stat-section-title">'+statLabel+'</div>';
+  h+='<table><thead><tr>';
+  h+='<th>Player</th>';
+  h+='<th class="right" style="color:var(--accent);">ZiPS WAR</th>';
+  h+='<th class="right">'+y2+'</th>';
+  h+='<th class="right">'+y1+'</th>';
+  h+='<th class="right">'+y0+'</th>';
+  h+='<th class="th-next col-sep">'+yn+' ▶</th>';
+  h+='<th class="th-proj col-sep">ZiPS 27</th>';
+  h+='<th class="th-proj">Steam 27</th>';
+  h+='<th class="th-proj">DC 27</th>';
+  h+='<th class="center col-sep">My Line</th>';
+  h+='<th class="center">Status</th>';
+  h+='</tr></thead><tbody>';
+
+  players.forEach(p=>{
+    const {id,name,stats:{s1,s2,s3,sNext},war}=p;
+    const sn=name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    const nv=raw(sNext,fieldKey);
+    const ml=getML(name,statKey);
+    const sid='st_'+name.replace(/[^a-zA-Z0-9]/g,'_')+'_'+statKey;
+    const step=statKey==='era'?'0.01':'0.5';
+    const zv=getProj(name,'zips',ptype,statKey);
+    const sv=getProj(name,'steamer',ptype,statKey);
+    const dv2=getProj(name,'dc',ptype,statKey);
+    const warDisp=war!==null&&war!==undefined?parseFloat(war).toFixed(1):'<span class="stat-na">—</span>';
+    // MLB's headshot service returns a real photo when one exists; if a player has
+    // none, it silently serves a small transparent/blank fallback instead of a real
+    // photo — checking naturalWidth after load catches that case and hides the circle.
+    const photo=id?'<img class="player-photo" src="https://img.mlbstatic.com/mlb-photos/image/upload/w_80,q_auto:best,f_auto/v1/people/'+id+'/headshot/67/current" alt="" onload="if(this.naturalWidth<20)this.style.display=\'none\'" onerror="this.style.display=\'none\'">':'';
+
+    h+='<tr>';
+    h+='<td><span class="player-name" onclick="copyName(this,\''+sn+'\')">'+photo+name+'</span></td>';
+    h+='<td class="td-war">'+warDisp+'</td>';
+    h+='<td class="right">'+dv(raw(s3,fieldKey))+'</td>';
+    h+='<td class="right">'+dv(raw(s2,fieldKey))+'</td>';
+    h+='<td class="right">'+dv(raw(s1,fieldKey))+'</td>';
+    h+='<td class="td-next col-sep">'+dv(nv)+'</td>';
+    h+='<td class="td-proj col-sep">'+dispProj(zv)+'</td>';
+    h+='<td class="td-proj">'+dispProj(sv)+'</td>';
+    h+='<td class="td-proj">'+dispProj(dv2)+'</td>';
+    h+='<td class="center col-sep"><input class="my-line-input '+(ml!==''?'has-value':'')+'" type="number" step="'+step+'" value="'+ml+'" placeholder="—" onchange="onLC(this,\''+sn+'\',\''+statKey+'\','+nv+')"></td>';
+    h+='<td class="center" id="'+sid+'">'+badge(nv,ml,statKey)+'</td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  return h;
+}
+
+function renderCard(team,batters,pitchers) {
+  const isAL=team.league?.name==='American League';
+  const bid='body-'+team.id, tp='tab-'+team.id;
+  const bs=[{key:'hr',label:'🏠 Home Runs',field:'homeRuns'},{key:'h',label:'🎯 Hits',field:'hits'},{key:'rbi',label:'💥 RBIs',field:'rbi'},{key:'sb',label:'💨 Stolen Bases',field:'stolenBases'}];
+  const ps=[{key:'k',label:'⚡ Strikeouts (proj: K/9)',field:'strikeOuts'},{key:'era',label:'📊 ERA',field:'era'},{key:'w',label:'🏆 Wins',field:'wins'}];
+  const bH=batters.length?bs.map(s=>buildTable(batters,s.key,s.label,s.field,'bat')).join(''):'<div class="empty-msg">No batter data</div>';
+  const pH=pitchers.length?ps.map(s=>buildTable(pitchers,s.key,s.label,s.field,'pit')).join(''):'<div class="empty-msg">No pitcher data</div>';
+  const card=document.createElement('div');
+  card.className='team-card'; card.id='team-'+team.id;
+  card.dataset.name=team.name.toLowerCase();
+  card.dataset.players=[...batters,...pitchers].map(p=>p.name.toLowerCase()).join(' ');
+  card.innerHTML=
+    '<div class="team-header" onclick="toggleTeam(\''+bid+'\',this)">'+
+    '<span class="team-name-label">'+team.name+'</span>'+
+    '<span class="team-league">'+(isAL?'AL':'NL')+'</span>'+
+    '<span class="team-toggle">▼</span></div>'+
+    '<div class="team-body" id="'+bid+'">'+
+    '<div class="tabs">'+
+    '<button class="tab-btn active" onclick="switchTab(\''+tp+'\',\'b\',this)">🏏 Top 10 Batters (WAR)</button>'+
+    '<button class="tab-btn pitcher-tab" onclick="switchTab(\''+tp+'\',\'p\',this)">⚾ Top 5 Pitchers (WAR)</button>'+
+    '</div>'+
+    '<div class="tab-content active" id="'+tp+'-b">'+bH+'</div>'+
+    '<div class="tab-content" id="'+tp+'-p">'+pH+'</div>'+
+    '</div>';
+  return card;
+}
+
+function switchTab(prefix,tab,btn) {
+  document.querySelectorAll('[id^="'+prefix+'-"]').forEach(c=>c.classList.remove('active'));
+  document.getElementById(prefix+'-'+tab).classList.add('active');
+  btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function toggleTeam(bid,hdr) {
+  const body=document.getElementById(bid),tog=hdr.querySelector('.team-toggle');
+  body.classList.toggle('open');
+  tog.textContent=body.classList.contains('open')?'▲':'▼';
+}
+
+async function loadTeam(team) {
+  const roster=await getRoster(team.id);
+  // Two-way players (e.g. Ohtani) can have position.type as 'Two-Way Player' or
+  // position.code 'Y' depending on the API response. Use position.code === '1'
+  // as the primary "is a pitcher" signal, but always include two-way players in BOTH lists.
+  const isTwoWay = p => p.position?.type === 'Two-Way Player' || p.position?.code === 'Y';
+  const batP=roster.filter(p=>p.position?.code!=='1' || isTwoWay(p));
+  const pitP=roster.filter(p=>p.position?.code==='1' || isTwoWay(p));
+
+  const bRaw=await Promise.all(batP.map(async p=>{
+    const stats=await getStats(p.person.id,'hitting');
+    const s=stats.s1||stats.s2||null;
+    const war=getProj(p.person.fullName,'zips','bat','war'); // ZiPS projected WAR drives ranking + display
+    const sortVal=war!==null?war*100:parseInt(s?.atBats||0)/6; // fallback: playing-time proxy if no ZiPS WAR loaded
+    return {id:p.person.id,name:p.person.fullName,stats,war,sortVal,position:p.position};
+  }));
+  const top10=bRaw.filter(p=>p.stats.s1||p.stats.s2||p.war!==null).sort((a,b)=>b.sortVal-a.sortVal).slice(0,10);
+
+  const pRaw=await Promise.all(pitP.map(async p=>{
+    const stats=await getStats(p.person.id,'pitching');
+    const s=stats.s1||stats.s2||null;
+    const war=getProj(p.person.fullName,'zips','pit','war'); // ZiPS projected WAR drives ranking + display
+    const sortVal=war!==null?war*100:parseFloat(s?.inningsPitched||0)/2; // fallback: playing-time proxy if no ZiPS WAR loaded
+    return {id:p.person.id,name:p.person.fullName,stats,war,sortVal,position:p.position};
+  }));
+  const top5=pRaw.filter(p=>p.stats.s1||p.stats.s2||p.war!==null).sort((a,b)=>b.sortVal-a.sortVal).slice(0,5);
+
+  // Debug capture: open the browser console and run, e.g.,
+  //   window.__mlbDebug['Los Angeles Dodgers']
+  // to inspect the full roster and every batter/pitcher candidate with their
+  // position, ZiPS WAR, and whether they made the cut.
+  window.__mlbDebug = window.__mlbDebug || {};
+  window.__mlbDebug[team.name] = { roster, batCandidates: bRaw, pitCandidates: pRaw, top10, top5 };
+
+  return {batters:top10,pitchers:top5};
+}
+
+async function loadAllTeams() {
+  const btn=document.getElementById('reload-btn');
+  btn.disabled=true;
+  document.getElementById('intro').style.display='none';
+  document.getElementById('teams-grid').innerHTML='';
+  setS('Loading saved lines...','loading');
+  await loadCloudLines();
+  setS('Loading teams...','loading');
+  try {
+    const teams=await fj(MLB_API+'/teams?sportId=1&season='+CY()).then(d=>d.teams);
+
+    // Group teams by division. The MLB API's team objects already include
+    // division.name (e.g. "American League West") and league.name — use
+    // that directly rather than hardcoding team-to-division mappings.
+    const divisionOrder = [
+      'American League East','American League Central','American League West',
+      'National League East','National League Central','National League West'
+    ];
+    const groups = {};
+    divisionOrder.forEach(d => groups[d] = []);
+    teams.forEach(t => {
+      const dname = t.division?.name;
+      if (groups[dname]) groups[dname].push(t);
+      else (groups['Other'] = groups['Other']||[]).push(t); // safety net for unexpected data
+    });
+    Object.values(groups).forEach(list => list.sort((a,b)=>a.name.localeCompare(b.name)));
+
+    const grid=document.getElementById('teams-grid');
+    let n=0, total=teams.length;
+
+    for (const dname of Object.keys(groups)) {
+      const divTeams = groups[dname];
+      if (!divTeams.length) continue;
+      const isAL = dname.startsWith('American');
+      const section = document.createElement('div');
+      section.className = 'division-section ' + (isAL ? 'al' : 'nl');
+      const title = document.createElement('div');
+      title.className = 'division-title';
+      title.textContent = (isAL ? '⚾ American League — ' : '⚾ National League — ') + dname.replace(/^(American|National) League /,'');
+      const divGrid = document.createElement('div');
+      divGrid.className = 'teams-grid';
+      section.appendChild(title);
+      section.appendChild(divGrid);
+      grid.appendChild(section);
+
+      // Each division has 5 teams — load them together as one batch so
+      // they land in their own section regardless of network timing.
+      await Promise.all(divTeams.map(async t=>{
+        setS('Loading '+(++n)+'/'+total+'...','loading');
+        try{const{batters,pitchers}=await loadTeam(t);divGrid.appendChild(renderCard(t,batters,pitchers));}
+        catch(e){console.error(t.name,e);}
+      }));
+    }
+
+    document.getElementById('last-update').textContent='Last updated: '+new Date().toLocaleString();
+    setS('✓ '+teams.length+' teams loaded','done');
+  } catch(e){setS('Error','error');console.error(e);}
+  btn.disabled=false;
+}
+
+function filterTeams() {
+  const q=document.getElementById('search').value.toLowerCase();
+  document.querySelectorAll('.team-card').forEach(card=>{
+    const m=!q||card.dataset.name?.includes(q)||card.dataset.players?.includes(q);
+    card.style.display=m?'':'none';
+    if(card.dataset.players?.includes(q)&&q.length>2){
+      const b=card.querySelector('.team-body'),t=card.querySelector('.team-toggle');
+      if(b&&!b.classList.contains('open')){b.classList.add('open');if(t)t.textContent='▲';}
+    }
+  });
+  // Hide a whole division section if none of its teams matched the search
+  document.querySelectorAll('.division-section').forEach(section=>{
+    const anyVisible=[...section.querySelectorAll('.team-card')].some(c=>c.style.display!=='none');
+    section.style.display=anyVisible?'':'none';
+  });
+}
+
+// Fetch saved lines + projections as soon as the page opens, so the status
+// line and "My Line" values are correct even before anyone clicks Reload Data.
+loadCloudLines();
+</script>
+</body>
+</html>

@@ -99,6 +99,8 @@
   .player-photo { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: var(--bg3); flex-shrink: 0; vertical-align: middle; }
   .player-name:hover { color: var(--accent); background: rgba(240,180,41,0.08); }
   .player-name.copied { color: var(--green); }
+  .player-name.search-match { background: rgba(240,180,41,0.22); box-shadow: 0 0 0 1px rgba(240,180,41,0.5); border-radius: 5px; }
+  tr.search-match-row { background: rgba(240,180,41,0.06); }
   .stat-na { color: var(--muted); }
   .my-line-input { width: 55px; padding: 3px 5px; font-size: 12px; text-align: center; background: var(--bg3); border: 0.5px solid var(--border2); border-radius: 4px; color: var(--text); font-family: monospace; }
   .my-line-input:focus { outline: none; border-color: var(--accent); }
@@ -198,7 +200,7 @@ function toggleProj() { document.getElementById('proj-panel').classList.toggle('
 // This fixes mismatches like "Acuña" (MLB API) vs "Acuna" (Fangraphs), "A.J." vs "AJ", etc.
 function normalizeName(s) {
   return (s||'')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // strip accents
+    .normalize('NFD').replace(/[̀-ͯ]/g,'') // strip accents
     .replace(/[.,']/g,'')                              // strip periods/commas/apostrophes
     .replace(/\s+/g,' ')
     .trim()
@@ -460,8 +462,8 @@ function buildTable(players,statKey,statLabel,fieldKey,ptype) {
     // photo — checking naturalWidth after load catches that case and hides the circle.
     const photo=id?'<img class="player-photo" data-tries="0" src="https://img.mlbstatic.com/mlb-photos/image/upload/w_120,q_auto:best,f_auto/v1/people/'+id+'/headshot/67/current" alt="" onerror="photoFallback(this,'+id+')">':'';
 
-    h+='<tr>';
-    h+='<td><span class="player-name" onclick="copyName(this,\''+sn+'\')">'+photo+name+'</span></td>';
+    h+='<tr data-player="'+name.toLowerCase().replace(/"/g,'')+'">';
+    h+='<td><span class="player-name" data-pname="'+name.toLowerCase().replace(/"/g,'')+'" onclick="copyName(this,\''+sn+'\')">'+photo+name+'</span></td>';
     h+='<td class="td-war">'+warDisp+'</td>';
     h+='<td class="right">'+dv(raw(s3,fieldKey))+'</td>';
     h+='<td class="right">'+dv(raw(s2,fieldKey))+'</td>';
@@ -616,7 +618,12 @@ async function loadAllTeams() {
 }
 
 function filterTeams() {
-  const q=document.getElementById('search').value.toLowerCase();
+  const q=document.getElementById('search').value.toLowerCase().trim();
+
+  // Clear any previous highlight/expansion state before reapplying
+  document.querySelectorAll('.player-name.search-match').forEach(el=>el.classList.remove('search-match'));
+  document.querySelectorAll('tr.search-match-row').forEach(el=>el.classList.remove('search-match-row'));
+
   document.querySelectorAll('.team-card').forEach(card=>{
     const m=!q||card.dataset.name?.includes(q)||card.dataset.players?.includes(q);
     card.style.display=m?'':'none';
@@ -625,6 +632,18 @@ function filterTeams() {
       if(b&&!b.classList.contains('open')){b.classList.add('open');if(t)t.textContent='▲';}
     }
   });
+
+  // Highlight the exact matching player name(s) so they're easy to spot at a
+  // glance once a team's tables are open, instead of just filtering the team.
+  if (q.length > 2) {
+    document.querySelectorAll('.player-name[data-pname]').forEach(el=>{
+      if (el.dataset.pname.includes(q)) {
+        el.classList.add('search-match');
+        el.closest('tr')?.classList.add('search-match-row');
+      }
+    });
+  }
+
   // Hide a whole division section if none of its teams matched the search
   document.querySelectorAll('.division-section').forEach(section=>{
     const anyVisible=[...section.querySelectorAll('.team-card')].some(c=>c.style.display!=='none');
